@@ -1,0 +1,97 @@
+<video id="myscreen" style="display:none;width:100%;height:calc(100% - 55px)"></video>
+<canvas id="generate" style="width:0;height:0"></canvas>
+<center><img id="scr" style="display:none;height:calc(100% - 55px)">
+<button id="share" style="display:block;width:150px;height:35px;background:#651fff;color:white;font-family:sans-serif;font-weight:bold;font-size:10pt;border-radius:5px;border:0;outline:none;cursor:pointer;margin-top:12px">Share your screen</button>
+<button id="stop" style="display:none;width:150px;height:35px;background:red;color:white;font-family:sans-serif;font-weight:bold;font-size:10pt;border-radius:5px;border:0;outline:none;cursor:pointer;margin-top:12px">Stop share screen</button></center>
+<script>
+var image = ''
+var history = ''
+const ws = new WebSocket('wss://'+window.document.location.host)
+const checkSS  = navigator.mediaDevices.getDisplayMedia 
+if(!checkSS){
+    document.getElementById('share').style.display = "none"
+}
+
+const takeScreenShot = async () => {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video:{
+          cursor:"always"
+        }
+      })
+      document.getElementById('share').style.display = "none"
+      document.getElementById('stop').style.display = "block"
+      document.getElementById('scr').style.display = "none"
+      document.getElementById('myscreen').style.display = "block"
+      document.getElementById('myscreen').srcObject = stream 
+      document.getElementById('myscreen').autoplay = true
+      const track = stream.getVideoTracks()[0]
+      // get correct video trac
+      // init Image Capture and not Video stream
+      s = setInterval(async () => {
+      const imageCapture = new ImageCapture(track)
+      // take first frame only
+      const bitmap = await imageCapture.grabFrame()
+      // destory video track to prevent more recording / mem leak
+
+      const canvas = document.getElementById('generate') 
+      // this could be a document.createElement('canvas') i you want
+      // draw weird image type to canvas so we can get a useful image
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
+      const context = canvas.getContext('2d')
+      context.drawImage(document.getElementById('myscreen'), 0, 0, bitmap.width, bitmap.height)
+      image = canvas.toDataURL()
+      });
+      t = setInterval(() => {
+      	ws.send(image)
+      }, 1000)
+      
+      document.getElementById('myscreen').srcObject.getTracks().forEach((track) => {
+          track.onended = function(){
+        clearInterval(s)
+        clearInterval(t)
+        document.getElementById('share').style.display = "block"
+        document.getElementById('stop').style.display = "none"
+        image = ""
+      }
+      })
+
+      // this turns the base 64 string to a [File] object
+      // const res = await fetch(image)
+      // const buff = await res.arrayBuffer()
+      // clone so we can rename, and put into array for easy proccessing
+      // const file = [
+      //  new File([buff], `photo_${new Date()}.jpg`, {
+      //    type: 'image/jpeg',
+      //  }),
+      // ]
+      // return file 
+}     
+
+document.getElementById('stop').onclick = function(){
+    document.getElementById('myscreen').srcObject.getTracks().forEach((track) => {
+        track.stop()
+        clearInterval(s)
+        clearInterval(t)
+        document.getElementById('share').style.display = "block"
+        document.getElementById('stop').style.display = "none"
+        image = ""
+    })
+}
+
+ws.onmessage = function(data){
+console.log(data)
+	var url = URL.createObjectURL(data.data)
+	var xhr = new XMLHttpRequest()
+	xhr.onreadystatechange = function(){
+		if(this.status == 200 && this.readyState == 4){
+		console.log(this.responseText)
+			document.getElementById('scr').src = this.responseText
+		}
+	}
+	xhr.open('GET', url)
+	xhr.send()
+}
+
+const button = document.getElementById('share').onclick = () => checkSS ? takeScreenShot() : {}
+</script>
